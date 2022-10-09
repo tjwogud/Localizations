@@ -19,28 +19,36 @@ namespace Localizations
         private static readonly Type LOCALIZATION_TYPE = typeof(SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>>);
 
         private SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>> localizations = new SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>>();
-        private readonly UnityModManager.ModEntry modEntry;
+        private readonly Action<string> logger;
+        private readonly bool log;
         private readonly string key;
         private readonly int gid;
         private readonly string path;
         public bool Loaded { get; private set; } = false;
         public bool Failed { get; private set; } = false;
 
-        private Localization(UnityModManager.ModEntry modEntry, string key, int gid, string path = null, OnLoad onLoad = null)
+        private Localization(string key, int gid, Action<string> logger, bool log, string path, OnLoad onLoad)
         {
-            this.modEntry = modEntry;
             this.key = key;
             this.gid = gid;
-            this.path = path ?? Path.Combine(modEntry.Path, "localizations.txt");
-            modEntry.Logger.Log("Loading Localization...");
+            this.logger = logger;
+            this.log = log;
+            this.path = path;
+            if (log)
+                logger.Invoke("Loading Localization...");
             StaticCoroutine.Do(Download(onLoad));
         }
 
         public delegate (string, SerializableDictionary<SystemLanguage, string>) OnLoad((string, SerializableDictionary<SystemLanguage, string>) keyValue);
 
-        public static Localization Load(UnityModManager.ModEntry modEntry, string key, int gid, OnLoad onLoad = null)
+        public static Localization Load(string key, int gid, UnityModManager.ModEntry modEntry, bool log = true, string path = null, OnLoad onLoad = null)
         {
-            return new Localization(modEntry, key, gid, onLoad: onLoad);
+            return new Localization(key, gid, modEntry.Logger.Log, log, path ?? Path.Combine(modEntry.Path, "localizations.txt"), onLoad);
+        }
+
+        public static Localization Load(string key, int gid, string path, Action<string> logger = null, OnLoad onLoad = null)
+        {
+            return new Localization(key, gid, logger, logger != null, path, onLoad);
         }
 
         public string this[string key, SystemLanguage defaultLanguage = SystemLanguage.English, Dictionary<string, object> parameters = null]
@@ -126,7 +134,8 @@ namespace Localizations
             using (var writer = new StreamWriter(path))
                 new XmlSerializer(LOCALIZATION_TYPE).Serialize(writer, localizations);
             Loaded = true;
-            modEntry.Logger.Log($"Loaded {localizations.Count} Localizations from Sheet");
+            if (log)
+                logger.Invoke($"Loaded {localizations.Count} Localizations from Sheet");
         }
 
         private void LoadFromFile()
@@ -138,7 +147,8 @@ namespace Localizations
                     {
                         localizations = new XmlSerializer(LOCALIZATION_TYPE).Deserialize(fileStream) as SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>>;
                         Loaded = true;
-                        modEntry.Logger.Log($"Loaded {localizations.Count} Localizations from Local File");
+                        if (log)
+                            logger.Invoke($"Loaded {localizations.Count} Localizations from Local File");
                         return;
                     }
                 }
@@ -147,7 +157,8 @@ namespace Localizations
                 }
             Loaded = true;
             Failed = true;
-            modEntry.Logger.Log("Couldn't Load Localizations!");
+            if (log)
+                logger.Invoke("Couldn't Load Localizations!");
         }
     }
 }
