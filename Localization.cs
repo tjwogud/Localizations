@@ -14,9 +14,12 @@ namespace Localizations
 {
     public class Localization : MonoBehaviour
     {
-        private static readonly string SPREADSHEET_URL_START = "https://docs.google.com/spreadsheets/d/";
-        private static readonly string SPREADSHEET_URL_END = "/gviz/tq?tqx=out:json&tq&gid=";
-        private static readonly Type LOCALIZATION_TYPE = typeof(SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>>);
+        private const string SPREADSHEET_URL_START = "https://docs.google.com/spreadsheets/d/";
+        private const string SPREADSHEET_URL_END = "/gviz/tq?tqx=out:json&tq&gid=";
+        private const string GITHUB_URL_START = "https://raw.githubusercontent.com/tjwogud/Localizations/main/ModLocalizations/";
+        private const string GITHUB_URL_END = ".txt";
+
+        private static readonly Type type = typeof(SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>>);
 
         private SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>> localizations = new SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>>();
         private readonly Action<string> logger;
@@ -88,11 +91,32 @@ namespace Localizations
 
         private IEnumerator Download(OnLoad onLoad = null)
         {
+            if (UnityModManager.HasNetworkConnection())
+            {
+                LoadFromFile();
+                yield break;
+            }
             UnityWebRequest request = UnityWebRequest.Get(SPREADSHEET_URL_START + key + SPREADSHEET_URL_END + gid);
             yield return request.SendWebRequest();
             byte[] bytes = request.downloadHandler.data;
             if (bytes == null)
             {
+                if (log)
+                    logger.Invoke("Couldn't Load Localizations from Sheet, Loading from Github...");
+                string modName = new FileInfo(path).DirectoryName;
+                request = UnityWebRequest.Get(GITHUB_URL_START + modName + GITHUB_URL_END);
+                yield return request.SendWebRequest();
+                bytes = request.downloadHandler.data;
+                if (bytes == null)
+                {
+                    Loaded = true;
+                    if (log)
+                        logger.Invoke("Couldn't Load Localizations!");
+                    yield break;
+                }
+                File.WriteAllBytes(path, bytes);
+                if (log)
+                    logger.Invoke($"Loaded {localizations.Count} Localizations from Github");
                 LoadFromFile();
                 yield break;
             }
@@ -132,7 +156,7 @@ namespace Localizations
                 localizations.Add(key, dict);
             }
             using (var writer = new StreamWriter(path))
-                new XmlSerializer(LOCALIZATION_TYPE).Serialize(writer, localizations);
+                new XmlSerializer(type).Serialize(writer, localizations);
             Loaded = true;
             if (log)
                 logger.Invoke($"Loaded {localizations.Count} Localizations from Sheet");
@@ -145,7 +169,7 @@ namespace Localizations
                 {
                     using (FileStream fileStream = File.OpenRead(path))
                     {
-                        localizations = new XmlSerializer(LOCALIZATION_TYPE).Deserialize(fileStream) as SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>>;
+                        localizations = new XmlSerializer(type).Deserialize(fileStream) as SerializableDictionary<string, SerializableDictionary<SystemLanguage, string>>;
                         Loaded = true;
                         if (log)
                             logger.Invoke($"Loaded {localizations.Count} Localizations from Local File");
