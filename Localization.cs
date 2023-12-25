@@ -91,7 +91,7 @@ namespace Localizations
 
         private IEnumerator Download(OnLoad onLoad = null)
         {
-            if (UnityModManager.HasNetworkConnection())
+            if (!UnityModManager.HasNetworkConnection())
             {
                 LoadFromFile();
                 yield break;
@@ -103,7 +103,7 @@ namespace Localizations
             {
                 if (log)
                     logger.Invoke("Couldn't Load Localizations from Sheet, Loading from Github...");
-                string modName = new FileInfo(path).DirectoryName;
+                string modName = new FileInfo(path).Directory.Name;
                 request = UnityWebRequest.Get(GITHUB_URL_START + modName + GITHUB_URL_END);
                 yield return request.SendWebRequest();
                 bytes = request.downloadHandler.data;
@@ -116,7 +116,7 @@ namespace Localizations
                 }
                 File.WriteAllBytes(path, bytes);
                 if (log)
-                    logger.Invoke($"Loaded {localizations.Count} Localizations from Github");
+                    logger.Invoke($"Loaded Localizations from Github");
                 LoadFromFile();
                 yield break;
             }
